@@ -14,13 +14,12 @@
     </header>
 
     <main class="container">
-        <!-- Visitor Entry Form -->
         <section class="form-section">
             <h2>Log New Visitor</h2>
             <form id="visitorForm">
                 <div class="form-group">
                     <label for="visitorName">Visitor Full Name</label>
-                    <input type="text" id="visitorName" placeholder="Juan Dela Cruz" required>
+                    <input type="text" id="visitorName" placeholder="Enter name..." required>
                 </div>
 
                 <div class="form-row">
@@ -29,14 +28,10 @@
                         <select id="floorSelect" onchange="updateRooms()" required>
                             <option value="" disabled selected>Select Floor</option>
                             <option value="1">1st Floor (Parking)</option>
-                            <!-- Generate floors 2 to 15 -->
                             <script>
                                 for (let i = 2; i <= 15; i++) {
-                                    document.write(`<option value="${i}">${i}${getOrdinal(i)} Floor</option>`);
-                                }
-                                function getOrdinal(n) {
-                                    let s = ["th", "st", "nd", "rd"], v = n % 100;
-                                    return s[(v - 20) % 10] || s[v] || s[0];
+                                    let suffix = (i === 2) ? "nd" : (i === 3) ? "rd" : "th";
+                                    document.write(`<option value="${i}">${i}${suffix} Floor</option>`);
                                 }
                             </script>
                         </select>
@@ -56,7 +51,6 @@
 
         <hr>
 
-        <!-- Visitor Log Table -->
         <section class="table-section">
             <h2>Current Daily Log</h2>
             <div class="table-wrapper">
@@ -71,69 +65,123 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- Logs will appear here dynamically -->
-                        <tr>
-                            <td colspan="5" class="empty-msg">No visitors logged today.</td>
-                        </tr>
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
         </section>
     </main>
 
-    <script>
-        // Logic to update rooms based on floor selection
-        function updateRooms() {
+    <script type="module">
+        // Import Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // 1. Your specific Firebase Config from the screenshot
+        const firebaseConfig = {
+            apiKey: "AIzaSyDr4L3R1s8ijHi_LEEMr77utNQ_9-cSJdI",
+            authDomain: "binondominium-system.firebaseapp.com",
+            projectId: "binondominium-system",
+            storageBucket: "binondominium-system.firebasestorage.app",
+            messagingSenderId: "387886927924",
+            appId: "1:387886927924:web:93c272dbc694be8cef3a61",
+            measurementId: "G-7D2Y3X9H9L"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const visitorsCol = collection(db, "visitors");
+
+        // --- UI LOGIC ---
+
+        // Function to update rooms (Attached to window so HTML can see it)
+        window.updateRooms = function() {
             const floor = document.getElementById('floorSelect').value;
             const roomSelect = document.getElementById('roomSelect');
             roomSelect.innerHTML = '<option value="" disabled selected>Select Room</option>';
             
             if (floor === "1") {
                 roomSelect.innerHTML += '<option value="P1">Parking Area</option>';
-                roomSelect.disabled = false;
-            } else if (floor > 1) {
-                // Floors 2-15 have 9 rooms each (e.g., 201-209)
+            } else {
+                // Floors 2-15 have 9 rooms each (e.g., Floor 2 has 201-209)
                 for (let r = 1; r <= 9; r++) {
                     let roomNum = `${floor}${r < 10 ? '0' + r : r}`;
                     roomSelect.innerHTML += `<option value="${roomNum}">Room ${roomNum}</option>`;
                 }
-                roomSelect.disabled = false;
             }
-        }
+            roomSelect.disabled = false;
+        };
 
-        // Basic functionality to handle form submission (Demo only)
-        document.getElementById('visitorForm').addEventListener('submit', function(e) {
+        // --- DATABASE OPERATIONS ---
+
+        // 2. CHECK IN: Create a new record
+        document.getElementById('visitorForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('visitorName').value;
             const floor = document.getElementById('floorSelect').value;
             const room = document.getElementById('roomSelect').value;
-            const timeIn = new Date().toLocaleTimeString();
 
-            const table = document.getElementById('visitorLog').getElementsByTagName('tbody')[0];
-            
-            // Remove "No visitors" message if it exists
-            if(table.rows[0].cells.length === 1) table.deleteRow(0);
-
-            const newRow = table.insertRow();
-            newRow.innerHTML = `
-                <td>${name}</td>
-                <td>Floor ${floor} - ${room}</td>
-                <td>${timeIn}</td>
-                <td class="out-time">--:--</td>
-                <td><button class="btn-out" onclick="checkOut(this)">Check Out</button></td>
-            `;
-            this.reset();
-            document.getElementById('roomSelect').disabled = true;
+            try {
+                await addDoc(visitorsCol, {
+                    name: name,
+                    location: `Floor ${floor} - ${room}`,
+                    timeIn: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    timeOut: null,
+                    timestamp: serverTimestamp() // Used for chronological sorting
+                });
+                document.getElementById('visitorForm').reset();
+                document.getElementById('roomSelect').disabled = true;
+            } catch (error) {
+                console.error("Firebase Error:", error);
+                alert("Could not save to database. Did you set your Rules to 'true'?");
+            }
         });
 
-        function checkOut(btn) {
-            const row = btn.closest('row'); // Standard JS finding
-            const timeOutCell = btn.parentElement.previousElementSibling;
-            timeOutCell.innerText = new Date().toLocaleTimeString();
-            btn.disabled = true;
-            btn.innerText = "Checked Out";
-            btn.style.backgroundColor = "#ccc";
-        }
+        // 3. READ: Listen for changes and update the table automatically
+        const q = query(visitorsCol, orderBy("timestamp", "desc"));
+        onSnapshot(q, (snapshot) => {
+            const tableBody = document.querySelector('#visitorLog tbody');
+            tableBody.innerHTML = ''; 
+
+            if (snapshot.empty) {
+                tableBody.innerHTML = '<tr><td colspan="5" class="empty-msg">No visitors logged today.</td></tr>';
+                return;
+            }
+
+            snapshot.forEach((docSnapshot) => {
+                const visitor = docSnapshot.data();
+                const id = docSnapshot.id;
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${visitor.name}</td>
+                    <td>${visitor.location}</td>
+                    <td>${visitor.timeIn}</td>
+                    <td>${visitor.timeOut ? visitor.timeOut : '<em>Still inside</em>'}</td>
+                    <td>
+                        ${!visitor.timeOut ? 
+                            `<button class="btn-out" onclick="checkOutVisitor('${id}')">Check Out</button>` : 
+                            `<span style="color: #27ae60; font-weight: bold;">✔ Logged</span>`
+                        }
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        });
+
+        // 4. CHECK OUT: Update the existing record
+        window.checkOutVisitor = async function(id) {
+            const visitorRef = doc(db, "visitors", id);
+            const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            try {
+                await updateDoc(visitorRef, {
+                    timeOut: timeNow
+                });
+            } catch (error) {
+                console.error("Error updating record:", error);
+            }
+        };
     </script>
 </body>
 </html>
