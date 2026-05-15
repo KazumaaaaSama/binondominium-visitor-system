@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binondominium Visitor System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h1>Binondominium Visitor System</h1>
+        <p>Official Building Access Log</p>
+    </header>
+
+    <main class="container">
+        <!-- Visitor Entry Form -->
+        <section class="form-section">
+            <h2>Log New Visitor</h2>
+            <form id="visitorForm">
+                <div class="form-group">
+                    <label for="visitorName">Visitor Full Name</label>
+                    <input type="text" id="visitorName" placeholder="Juan Dela Cruz" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="floorSelect">Floor</label>
+                        <select id="floorSelect" onchange="updateRooms()" required>
+                            <option value="" disabled selected>Select Floor</option>
+                            <option value="1">1st Floor (Parking)</option>
+                            <!-- Generate floors 2 to 15 -->
+                            <script>
+                                for (let i = 2; i <= 15; i++) {
+                                    document.write(`<option value="${i}">${i}${getOrdinal(i)} Floor</option>`);
+                                }
+                                function getOrdinal(n) {
+                                    let s = ["th", "st", "nd", "rd"], v = n % 100;
+                                    return s[(v - 20) % 10] || s[v] || s[0];
+                                }
+                            </script>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="roomSelect">Room Number</label>
+                        <select id="roomSelect" required disabled>
+                            <option value="" disabled selected>Select Room</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit">Check In Visitor</button>
+            </form>
+        </section>
+
+        <hr>
+
+        <!-- Visitor Log Table -->
+        <section class="table-section">
+            <h2>Current Daily Log</h2>
+            <div class="table-wrapper">
+                <table id="visitorLog">
+                    <thead>
+                        <tr>
+                            <th>Visitor Name</th>
+                            <th>Location</th>
+                            <th>Time In</th>
+                            <th>Time Out</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Logs will appear here dynamically -->
+                        <tr>
+                            <td colspan="5" class="empty-msg">No visitors logged today.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Logic to update rooms based on floor selection
+        function updateRooms() {
+            const floor = document.getElementById('floorSelect').value;
+            const roomSelect = document.getElementById('roomSelect');
+            roomSelect.innerHTML = '<option value="" disabled selected>Select Room</option>';
+            
+            if (floor === "1") {
+                roomSelect.innerHTML += '<option value="P1">Parking Area</option>';
+                roomSelect.disabled = false;
+            } else if (floor > 1) {
+                // Floors 2-15 have 9 rooms each (e.g., 201-209)
+                for (let r = 1; r <= 9; r++) {
+                    let roomNum = `${floor}${r < 10 ? '0' + r : r}`;
+                    roomSelect.innerHTML += `<option value="${roomNum}">Room ${roomNum}</option>`;
+                }
+                roomSelect.disabled = false;
+            }
+        }
+
+        // Basic functionality to handle form submission (Demo only)
+        document.getElementById('visitorForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('visitorName').value;
+            const floor = document.getElementById('floorSelect').value;
+            const room = document.getElementById('roomSelect').value;
+            const timeIn = new Date().toLocaleTimeString();
+
+            const table = document.getElementById('visitorLog').getElementsByTagName('tbody')[0];
+            
+            // Remove "No visitors" message if it exists
+            if(table.rows[0].cells.length === 1) table.deleteRow(0);
+
+            const newRow = table.insertRow();
+            newRow.innerHTML = `
+                <td>${name}</td>
+                <td>Floor ${floor} - ${room}</td>
+                <td>${timeIn}</td>
+                <td class="out-time">--:--</td>
+                <td><button class="btn-out" onclick="checkOut(this)">Check Out</button></td>
+            `;
+            this.reset();
+            document.getElementById('roomSelect').disabled = true;
+        });
+
+        function checkOut(btn) {
+            const row = btn.closest('row'); // Standard JS finding
+            const timeOutCell = btn.parentElement.previousElementSibling;
+            timeOutCell.innerText = new Date().toLocaleTimeString();
+            btn.disabled = true;
+            btn.innerText = "Checked Out";
+            btn.style.backgroundColor = "#ccc";
+        }
+    </script>
+</body>
+</html>
